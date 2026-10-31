@@ -1,0 +1,34 @@
+name: "Sync Canonical Beta Release"
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión específica a promover (vacío = todas)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ startsWith(github.event.release.tag_name, 'beta-macos') && 'sync-macos' || format('sync-{0}', github.event.release.tag_name || 'manual') }}
+  cancel-in-progress: false
+
+jobs:
+  sync-release:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.release.tag_name, '-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Promote versioned release to canonical updater tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_REPO: ${{ github.repository }}
+          FILTER_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
+          FILTER_VERSION: ${{ inputs.version || '' }}
+          INCLUDE_DRAFTS: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+        run: python3 .github/scripts/promote_beta_releases.py
